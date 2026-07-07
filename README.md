@@ -1,25 +1,27 @@
 # omni-playground
 
-A local web playground for **multimodal generation** — chat, text-to-image, image editing and
-video generation against a [vLLM-omni](https://github.com/vllm-project/vllm-omni) server.
+A local web playground for **multimodal generation** — realtime voice, chat, text-to-image, image
+editing, video generation, TTS and streaming video chat against a
+[vLLM-omni](https://github.com/vllm-project/vllm-omni) server.
 Ships as a single npm package with zero runtime dependencies: run one command, get a UI.
 
 ```
-npx omni-playground --target http://<your-vllm-omni-host>:8091
+npx omni-playground --target http://<your-vllm-omni-host>:8091 --open
 ```
 
-Then open <http://127.0.0.1:3888>.
+That starts the server on <http://127.0.0.1:3888> (and opens it with `--open`). Pick a page in the
+left rail; open **Settings** to change the target, set an API key, or free/restore GPU memory.
 
 ## What you get
 
 | Page  | Endpoint                              | Highlights                                                                 |
 | ----- | ------------------------------------- | -------------------------------------------------------------------------- |
+| Realtime | `WS /v1/realtime`                  | Voice chat — mic in (PCM16 @ 16 kHz) → text + voice reply (PCM16 @ 24 kHz), inline player + WAV download per reply. **Auto mode** uses client-side VAD for hands-free turns (speech starts a turn, silence ends it, auto re-arm); **push-to-talk** for manual control. No server VAD (`session.update` → `commit` → `append` → `commit final`) |
 | Chat  | `POST /v1/chat/completions`           | SSE streaming, image & audio attachments, sampling controls, markdown       |
 | Image | `POST /v1/images/generations`         | negative prompt, steps / guidance / cfg / seed, gallery + download          |
 | Edit  | `POST /v1/images/edits`               | multi-image upload (multipart), strength, source vs. result comparison      |
 | Video | `POST /v1/videos` (async jobs)        | t2v / i2v via reference image, live progress polling, inline playback, download, per-stage timing & peak-memory metrics |
 | Audio | `POST /v1/audio/speech` · `/v1/audio/generate` · `WS /v1/audio/speech/stream` | TTS with voice picker (`/v1/audio/voices`), speed, zero-shot voice clone (ref audio + transcript), voice library upload/delete; text-to-sound with length / steps / guidance; optional streaming TTS with progressive per-sentence playback |
-| Realtime | `WS /v1/realtime`                     | Voice chat — mic in (PCM16 @ 16 kHz) → text + voice reply (PCM16 @ 24 kHz), with an inline player + WAV download per reply. **Auto mode** uses client-side VAD for hands-free turns (speech starts a turn, silence ends it, auto re-arm); **push-to-talk** mode for manual control. The endpoint itself has no server VAD (`session.update` → `commit` → `append` → `commit final`) |
 | Vid Chat | `WS /v1/video/chat/stream` · `WS /v1/realtime/video` | **Chat:** sample frames from an uploaded clip in-browser, stream them up, get a text + spoken reply. **Generate:** prompt → generated video streamed back as fragmented-MP4 chunks (needs a video-generation model) |
 
 All requests are proxied through the local server (`/api/* → target`), so the browser never talks
@@ -64,9 +66,13 @@ The upstream API surface is captured in
 ## Notes
 
 - Which pages actually produce output depends on what the target server has loaded: an omni chat
-  model serves the Chat page, diffusion models serve the Image/Edit/Video pages. Endpoints that
-  are not backed by a loaded model return an error, which the UI surfaces verbatim.
-- Node.js ≥ 18 is required.
+  model serves the Chat/Realtime/Vid-Chat pages, diffusion models serve the Image/Edit/Video pages,
+  a TTS model serves the Audio page. Endpoints that are not backed by a loaded model return an
+  error, which the UI surfaces verbatim.
+- **Realtime** and **Vid Chat → Chat** need an omni model that supports the streaming path; the
+  first reply on a large model warms up slowly (tens of seconds) before tokens/audio start.
+- Node.js ≥ 18 is required. Microphone / webcam pages need a secure context — `127.0.0.1` counts, so
+  a local run is fine without HTTPS.
 
 ## License
 
