@@ -1,0 +1,61 @@
+{
+  "name": "omni-playground",
+  "version": "0.1.0",
+  "description": "A local web playground for multimodal generation — chat, text-to-image, image editing, video, realtime voice and streaming against vLLM-omni endpoints.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FayeSpica/omni-playground.git"
+  },
+  "homepage": "https://github.com/FayeSpica/omni-playground#readme",
+  "bugs": {
+    "url": "https://github.com/FayeSpica/omni-playground/issues"
+  },
+  "bin": {
+    "omni-playground": "bin/omni-playground.js"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "bin",
+    "server",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite --config web/vite.config.ts",
+    "build": "tsc -p web/tsconfig.json --noEmit && vite build --config web/vite.config.ts",
+    "start": "node bin/omni-playground.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "vllm",
+    "vllm-omni",
+    "multimodal",
+    "playground",
+    "text-to-image",
+    "image-to-video",
+    "realtime",
+    "text-to-speech",
+    "websocket",
+    "webui"
+  ],
+  "devDependencies": {
+    "@fontsource/bricolage-grotesque": "^5.2.10",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/instrument-sans": "^5.2.8",
+    "@types/node": "^26.1.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "marked": "^18.0.5",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3"
+  }
+}
