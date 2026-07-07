@@ -12,6 +12,8 @@ npx omni-playground --target http://<your-vllm-omni-host>:8091 --open
 That starts the server on <http://127.0.0.1:3888> (and opens it with `--open`). Pick a page in the
 left rail; open **Settings** to change the target, set an API key, or free/restore GPU memory.
 
+![omni-playground — multimodal darkroom UI](https://raw.githubusercontent.com/FayeSpica/omni-playground/main/images/screenshot.png)
+
 ## What you get
 
 | Page  | Endpoint                              | Highlights                                                                 |
