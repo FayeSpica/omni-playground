@@ -57,7 +57,8 @@ npm run build                                   # type-check + build to dist/web
 npm start -- --target http://127.0.0.1:8091     # run the packaged CLI locally
 ```
 
-The upstream API surface is captured in [`docs/vllm-omni-openapi.json`](docs/vllm-omni-openapi.json);
+The upstream API surface is captured in
+[`docs/vllm-omni-openapi.json`](https://github.com/FayeSpica/omni-playground/blob/main/docs/vllm-omni-openapi.json);
 `web/src/lib/types.ts` is hand-distilled from it.
 
 ## Notes

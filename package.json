@@ -1,9 +1,17 @@
 {
   "name": "omni-playground",
   "version": "0.1.0",
-  "description": "A local web playground for multimodal generation — chat, text-to-image, image editing and video generation against vLLM-omni endpoints.",
+  "description": "A local web playground for multimodal generation — chat, text-to-image, image editing, video, realtime voice and streaming against vLLM-omni endpoints.",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FayeSpica/omni-playground.git"
+  },
+  "homepage": "https://github.com/FayeSpica/omni-playground#readme",
+  "bugs": {
+    "url": "https://github.com/FayeSpica/omni-playground/issues"
+  },
   "bin": {
     "omni-playground": "bin/omni-playground.js"
   },
@@ -28,6 +36,9 @@
     "playground",
     "text-to-image",
     "image-to-video",
+    "realtime",
+    "text-to-speech",
+    "websocket",
     "webui"
   ],
   "devDependencies": {
