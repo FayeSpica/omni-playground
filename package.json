@@ -15,6 +15,9 @@
   "bin": {
     "omni-playground": "bin/omni-playground.js"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "files": [
     "bin",
     "server",
