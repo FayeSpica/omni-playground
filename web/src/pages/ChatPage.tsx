@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { chatStream } from '../lib/client'
 import { mergeWavSegments } from '../lib/audio'
+import { INPUT_RATE, MicCapture, WavSegmentPlayer, pcm16ChunksToWav } from '../lib/realtime'
 import { fileToDataURL, useSettings } from '../lib/store'
 import type { ChatMessage, ChatParams, ContentPart } from '../lib/types'
 import { Empty, ErrorBanner, Field, NumInput } from '../components/Field'
@@ -56,6 +57,57 @@ export function ChatPage() {
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // —— voice input: record the mic straight into an audio attachment ——
+  const [recording, setRecording] = useState(false)
+  const [recLevel, setRecLevel] = useState(0)
+  const micRef = useRef<MicCapture | null>(null)
+  const recChunksRef = useRef<string[]>([])
+
+  // —— auto-play the model's spoken reply as it streams ——
+  const [autoplay, setAutoplay] = useState(true)
+  const playerRef = useRef<WavSegmentPlayer | null>(null)
+
+  async function startRec() {
+    if (recording) return
+    setError(null)
+    const mic = new MicCapture()
+    micRef.current = mic
+    recChunksRef.current = []
+    try {
+      await mic.start(
+        (b64) => recChunksRef.current.push(b64),
+        (lvl) => setRecLevel(lvl)
+      )
+      setRecording(true)
+    } catch (e) {
+      setError(`microphone: ${(e as Error).message ?? e}`)
+      mic.stop()
+      micRef.current = null
+    }
+  }
+
+  function stopRec() {
+    if (!recording) return
+    micRef.current?.stop()
+    micRef.current = null
+    setRecording(false)
+    setRecLevel(0)
+    const blob = pcm16ChunksToWav(recChunksRef.current, INPUT_RATE)
+    recChunksRef.current = []
+    if (!blob) return
+    const file = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' })
+    setAttachments((cur) => [...cur, { file, previewUrl: URL.createObjectURL(blob) }])
+  }
+
+  // stop the mic / close the player if the page unmounts mid-stream
+  useEffect(
+    () => () => {
+      micRef.current?.stop()
+      playerRef.current?.close()
+    },
+    []
+  )
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages])
@@ -66,6 +118,11 @@ export function ChatPage() {
     setError(null)
     setBusy(true)
     setInput('')
+
+    // Create the audio player synchronously inside this click/Enter gesture so
+    // its AudioContext is allowed to start; feed it segments as they stream in.
+    playerRef.current?.close()
+    playerRef.current = autoplay ? new WavSegmentPlayer() : null
 
     const images: string[] = []
     const audio: string[] = []
@@ -105,15 +162,12 @@ export function ChatPage() {
         {
           onDelta: (delta) => patchLast((last) => ({ text: last.text + delta })),
           onAudio: (b64) => {
+            // Live playback is handled by the gapless player; just collect the
+            // segments and build the (replayable) bar once, when the reply ends —
+            // rebuilding the merged WAV per segment janks the main thread and
+            // starves the audio scheduler, causing a gap after the first chunk.
+            playerRef.current?.enqueue(b64)
             audioSegs.push(b64)
-            const blob = mergeWavSegments(audioSegs)
-            if (blob) {
-              const url = URL.createObjectURL(blob)
-              patchLast((last) => {
-                if (last.audioOutUrl) URL.revokeObjectURL(last.audioOutUrl)
-                return { audioOutUrl: url }
-              })
-            }
           },
           onImage: (b64) =>
             patchLast((last) => ({
@@ -125,10 +179,14 @@ export function ChatPage() {
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setError(String((e as Error).message ?? e))
     } finally {
+      // Build the replayable audio bar once, now that all segments are in.
+      const audioBlob = audioSegs.length ? mergeWavSegments(audioSegs) : null
+      const audioOutUrl = audioBlob ? URL.createObjectURL(audioBlob) : undefined
       setMessages((cur) => {
         const next = [...cur]
         const last = next[next.length - 1]
-        if (last?.streaming) next[next.length - 1] = { ...last, streaming: false }
+        if (last?.streaming || audioOutUrl)
+          next[next.length - 1] = { ...last, streaming: false, ...(audioOutUrl ? { audioOutUrl } : {}) }
         return next.filter(
           (m, i) =>
             !(
@@ -241,20 +299,33 @@ export function ChatPage() {
             >
               ＋
             </button>
-            <textarea
-              className="textarea"
-              style={{ flex: 1 }}
-              placeholder="Message… (Enter to send, Shift+Enter for newline)"
-              value={input}
-              rows={1}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  send()
-                }
-              }}
-            />
+            <button
+              className={`btn${recording ? ' btn--danger' : ' btn--ghost'}`}
+              title={recording ? 'stop & attach recording' : 'record voice'}
+              onClick={recording ? stopRec : startRec}
+            >
+              {recording ? '■' : '🎙'}
+            </button>
+            {recording ? (
+              <div className="rt-meter" style={{ flex: 1 }} title="recording…">
+                <div className="rt-meter__fill" style={{ width: `${Math.round(recLevel * 100)}%` }} />
+              </div>
+            ) : (
+              <textarea
+                className="textarea"
+                style={{ flex: 1 }}
+                placeholder="Message… (Enter to send, Shift+Enter for newline)"
+                value={input}
+                rows={1}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    send()
+                  }
+                }}
+              />
+            )}
             {busy ? (
               <button className="btn btn--danger" onClick={stop}>
                 Stop
@@ -310,6 +381,12 @@ export function ChatPage() {
             onChange={(v) => setParams({ ...params, max_tokens: v === '' ? 2048 : v })}
           />
         </Field>
+        <label
+          style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: 'var(--text-dim)', margin: '4px 0 12px' }}
+        >
+          <input type="checkbox" checked={autoplay} onChange={(e) => setAutoplay(e.target.checked)} />
+          auto-play voice replies
+        </label>
         <button className="btn btn--ghost btn--sm" onClick={() => setMessages([])}>
           Clear conversation
         </button>

@@ -292,6 +292,64 @@ export async function deleteVoice(name: string): Promise<void> {
   if (!res.ok) await fail(res)
 }
 
+// —— playground local filesystem (recordings, duplex input simulation) ——
+
+export interface FsEntry {
+  name: string
+  size: number
+  mtime: number
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
+/** Save a blob as a file on the playground server's host. Returns the absolute path. */
+export async function fsSave(dir: string, name: string, blob: Blob): Promise<string> {
+  const data = bytesToBase64(new Uint8Array(await blob.arrayBuffer()))
+  const res = await fetch('/playground/fs/save', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ dir, name, data }),
+  })
+  if (!res.ok) await fail(res)
+  return (await res.json()).path
+}
+
+/** List audio files in a directory on the playground server's host. */
+export async function fsList(dir: string): Promise<FsEntry[]> {
+  const res = await fetch(`/playground/fs/list?dir=${encodeURIComponent(dir)}`)
+  if (!res.ok) await fail(res)
+  return (await res.json()).files ?? []
+}
+
+/** Read a file from the playground server's host. */
+export async function fsRead(path: string): Promise<Blob> {
+  const res = await fetch(`/playground/fs/read?path=${encodeURIComponent(path)}`)
+  if (!res.ok) await fail(res)
+  return res.blob()
+}
+
+export interface FsBrowseResult {
+  path: string
+  parent: string | null
+  dirs: string[]
+  error?: string
+}
+
+/** List subdirectories of a path on the playground server's host (for the dir picker). */
+export async function fsBrowse(path?: string): Promise<FsBrowseResult> {
+  const q = path ? `?path=${encodeURIComponent(path)}` : ''
+  const res = await fetch(`/playground/fs/browse${q}`)
+  if (!res.ok) await fail(res)
+  return res.json()
+}
+
 // —— playground server config (absent in `vite dev`, hence the catch) ——
 
 export async function getProxyTarget(): Promise<string | null> {

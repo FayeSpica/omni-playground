@@ -17,16 +17,20 @@ import { ImageEditPage } from './pages/ImageEditPage'
 import { VideoPage } from './pages/VideoPage'
 import { AudioPage } from './pages/AudioPage'
 import { RealtimePage } from './pages/RealtimePage'
+import { DuplexPage } from './pages/DuplexPage'
+import { RecordPage } from './pages/RecordPage'
 import { VideoChatPage } from './pages/VideoChatPage'
 
 const PAGES = [
   { id: 'realtime', idx: '01', label: 'Realtime', title: 'Realtime Voice', sub: '/v1/realtime' },
-  { id: 'chat', idx: '02', label: 'Chat', title: 'Omni Chat', sub: '/v1/chat/completions' },
-  { id: 'image', idx: '03', label: 'Image', title: 'Text to Image', sub: '/v1/images/generations' },
-  { id: 'edit', idx: '04', label: 'Edit', title: 'Image Edit', sub: '/v1/images/edits' },
-  { id: 'video', idx: '05', label: 'Video', title: 'Video Generation', sub: '/v1/videos' },
-  { id: 'audio', idx: '06', label: 'Audio', title: 'Speech & Sound', sub: '/v1/audio/speech · /v1/audio/generate' },
-  { id: 'videochat', idx: '07', label: 'Vid Chat', title: 'Video Chat', sub: '/v1/video/chat/stream · /v1/realtime/video' },
+  { id: 'duplex', idx: '02', label: 'Duplex', title: 'Full-Duplex Voice', sub: '/v1/realtime?duplex=1' },
+  { id: 'record', idx: '03', label: 'Record', title: 'Record Audio', sub: 'mic → WAV → directory' },
+  { id: 'chat', idx: '04', label: 'Chat', title: 'Omni Chat', sub: '/v1/chat/completions' },
+  { id: 'image', idx: '05', label: 'Image', title: 'Text to Image', sub: '/v1/images/generations' },
+  { id: 'edit', idx: '06', label: 'Edit', title: 'Image Edit', sub: '/v1/images/edits' },
+  { id: 'video', idx: '07', label: 'Video', title: 'Video Generation', sub: '/v1/videos' },
+  { id: 'audio', idx: '08', label: 'Audio', title: 'Speech & Sound', sub: '/v1/audio/speech · /v1/audio/generate' },
+  { id: 'videochat', idx: '09', label: 'Vid Chat', title: 'Video Chat', sub: '/v1/video/chat/stream · /v1/realtime/video' },
 ] as const
 
 type PageId = (typeof PAGES)[number]['id']
@@ -144,6 +148,8 @@ export function App() {
         {page === 'video' && <VideoPage />}
         {page === 'audio' && <AudioPage />}
         {page === 'realtime' && <RealtimePage />}
+        {page === 'duplex' && <DuplexPage />}
+        {page === 'record' && <RecordPage />}
         {page === 'videochat' && <VideoChatPage />}
       </div>
 

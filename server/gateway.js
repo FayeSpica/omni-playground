@@ -1,5 +1,8 @@
 import http from 'node:http'
 import https from 'node:https'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 // Hop-by-hop headers must not be forwarded (RFC 7230 §6.1)
 const HOP_BY_HOP = new Set([
@@ -138,11 +141,114 @@ export function createGateway(initialTarget) {
     res.end()
   }
 
+  // —— /playground/fs — local file access for the recorder / duplex simulator ——
+  // Local-only tool: paths must be absolute, saved filenames must be plain
+  // (no separators or traversal). Audio only; no auth by design (loopback).
+
+  const AUDIO_EXTENSIONS = new Set(['.wav', '.mp3', '.m4a', '.flac', '.ogg', '.opus', '.pcm'])
+
+  function sendJson(res, status, body) {
+    res.writeHead(status, { 'content-type': 'application/json' })
+    res.end(JSON.stringify(body))
+  }
+
+  function isPlainFilename(name) {
+    return (
+      typeof name === 'string' &&
+      name.length > 0 &&
+      !name.includes('/') &&
+      !name.includes('\\') &&
+      !name.includes('..')
+    )
+  }
+
+  function handleFs(req, res) {
+    const url = new URL(req.url, 'http://localhost')
+    if (req.method === 'GET' && url.pathname === '/playground/fs/browse') {
+      const dir = url.searchParams.get('path') || os.homedir()
+      if (!path.isAbsolute(dir)) return sendJson(res, 400, { error: 'path_must_be_absolute' })
+      const parent = path.dirname(dir)
+      try {
+        const dirs = fs
+          .readdirSync(dir, { withFileTypes: true })
+          .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+          .map((e) => e.name)
+          .sort()
+        sendJson(res, 200, { path: dir, parent: parent === dir ? null : parent, dirs })
+      } catch (err) {
+        sendJson(res, 200, {
+          path: dir,
+          parent: parent === dir ? null : parent,
+          dirs: [],
+          error: String(err.message ?? err),
+        })
+      }
+      return
+    }
+    if (req.method === 'POST' && url.pathname === '/playground/fs/save') {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        try {
+          const { dir, name, data } = JSON.parse(body)
+          if (!path.isAbsolute(dir || '') || !isPlainFilename(name) || typeof data !== 'string') {
+            return sendJson(res, 400, { error: 'invalid_save_request' })
+          }
+          fs.mkdirSync(dir, { recursive: true })
+          const target = path.join(dir, name)
+          fs.writeFileSync(target, Buffer.from(data, 'base64'))
+          sendJson(res, 200, { path: target })
+        } catch (err) {
+          sendJson(res, 500, { error: 'save_failed', message: String(err.message ?? err) })
+        }
+      })
+      return
+    }
+    if (req.method === 'GET' && url.pathname === '/playground/fs/list') {
+      const dir = url.searchParams.get('dir') || ''
+      if (!path.isAbsolute(dir)) return sendJson(res, 400, { error: 'dir_must_be_absolute' })
+      try {
+        const files = fs
+          .readdirSync(dir)
+          .filter((n) => AUDIO_EXTENSIONS.has(path.extname(n).toLowerCase()))
+          .map((n) => {
+            const st = fs.statSync(path.join(dir, n))
+            return { name: n, size: st.size, mtime: st.mtimeMs }
+          })
+          .sort((a, b) => b.mtime - a.mtime)
+        sendJson(res, 200, { files })
+      } catch (err) {
+        sendJson(res, 200, { files: [], error: String(err.message ?? err) })
+      }
+      return
+    }
+    if (req.method === 'GET' && url.pathname === '/playground/fs/read') {
+      const filePath = url.searchParams.get('path') || ''
+      if (!path.isAbsolute(filePath)) return sendJson(res, 400, { error: 'path_must_be_absolute' })
+      if (!AUDIO_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+        return sendJson(res, 400, { error: 'not_an_audio_file' })
+      }
+      try {
+        const data = fs.readFileSync(filePath)
+        res.writeHead(200, { 'content-type': 'application/octet-stream' })
+        res.end(data)
+      } catch (err) {
+        sendJson(res, 404, { error: 'read_failed', message: String(err.message ?? err) })
+      }
+      return
+    }
+    sendJson(res, 404, { error: 'unknown_fs_endpoint' })
+  }
+
   return {
     /** Returns true if the request was an /api or /playground/config request and was handled. */
     handle(req, res) {
       if (req.url.startsWith('/api/')) {
         proxy(req, res)
+        return true
+      }
+      if (req.url.startsWith('/playground/fs/')) {
+        handleFs(req, res)
         return true
       }
       if (req.url.startsWith('/playground/config')) {
